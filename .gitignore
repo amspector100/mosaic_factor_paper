@@ -1,9 +1,12 @@
 # Don't save data
 TODO.md
 quicktest.ipynb
-data/bfre/*
+data/bfre/
+data/sim_inputs/
+data/bfre_cache/
 docs/build/
 docs/dir/
+test/ # this is not used anyway
 # Don't save test profiling
 prof/*
 proftest/*
