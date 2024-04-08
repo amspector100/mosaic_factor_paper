@@ -9,8 +9,9 @@ import time
 import numpy as np
 from scipy import stats
 import pandas as pd
-from context import mosaicperm, mosaic_factor_paper
-from mosaic_factor_paper import parser, utilities
+from context import mosaicperm as mp
+from context import mosaic_paper_src
+from mosaic_paper_src import parser, utilities
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -29,7 +30,7 @@ COLUMNS = [
 	'T',
 	'runtime',
 ]
-L_FILEPATH = "../data/sim_imputs/L.npy"
+L_FILEPATH = "../data/sim_inputs/L.npy"
 
 def sample_data(n, seed, rho, sparsity, L):
 	p, k = L.shape
@@ -61,29 +62,30 @@ def append_mpt_results(
 	dgp_args,
 	runtime
 ):
+	# Append final p-value
 	output.append(
 		dgp_args + [
 			test_stat_name,
 			'adaptive',
 			method,
 			factor_test.pval,
-			factor_test.T0,
+			factor_test.adapt_stat,
 			runtime
 		]
 	)
-	if hasattr(factor_test, "raw_T0"):
-		T0s = factor_test.raw_T0
-		Ts = factor_test.raw_Ts
-		nrand = len(Ts)
-		for i in range(len(factor_test.raw_T0)):
-			pvali = (1 + np.sum(T0s[i] <= Ts[:, i])) / (nrand + 1) 
+	if len(factor_test.statistic) > 1:
+		stat = factor_test.statistic
+		null_stats = factor_test.null_statistics
+		nrand = len(null_stats)
+		for i in range(len(stat)):
+			pvali = (1 + np.sum(stat[i] <= null_stats[:, i])) / (nrand + 1) 
 			output.append(
 				dgp_args + [
 					test_stat_name,
 					i,
 					method,
 					pvali,
-					T0s[i],
+					stat[i],
 					runtime
 				]
 			)
@@ -153,27 +155,27 @@ def single_seed_sim(
 		[mp.statistics.quantile_maxcorr_stat],
 		['quant_corr'],
 	):
-		for part_size, method, nreps in zip(
+		for ngroups, method, nreps in zip(
 			[None, 1],
 			['MPT', 'OLS oracle'],
 			[nrand, 1]
 		):
 			time0 = time.time()
-			frtest = frt.frt.FactorRandomizationTest(
-				Y=data['Y'],
-				F=L,
+			mptest = mp.factor.MosaicFactorTest(
+				outcomes=data['Y'],
+				exposures=L,
 				test_stat=test_stat,
-				partition_size=part_size,
+				ngroups=ngroups,
 			)
-			frtest.compute_p_value(reps=nreps, verbose=False)
-			frt_runtime = time.time() - time0
+			mptest.fit(nrand=nreps, verbose=False)
+			mpt_runtime = time.time() - time0
 			append_mpt_results(
 				output,
-				factor_test=frtest,
+				factor_test=mptest,
 				method=method,
 				test_stat_name=test_stat_name,
 				dgp_args=dgp_args,
-				runtime=frt_runtime, 
+				runtime=mpt_runtime, 
 			)
 
 

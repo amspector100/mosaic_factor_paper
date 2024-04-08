@@ -4,6 +4,7 @@ quicktest.ipynb
 data/bfre/
 data/sim_inputs/
 data/bfre_cache/
+sim_data/
 docs/build/
 docs/dir/
 test/ # this is not used anyway
