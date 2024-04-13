@@ -5,6 +5,7 @@ data/bfre/
 data/sim_inputs/
 data/bfre_cache/
 data/bfre_results/
+sim_data/
 docs/build/
 docs/dir/
 plots/
