@@ -4,8 +4,11 @@ quicktest.ipynb
 data/bfre/
 data/sim_inputs/
 data/bfre_cache/
+data/bfre_results/
 docs/build/
 docs/dir/
+plots/
+bfre_analysis/bfre_preprocessing.ipynb # only used for debugging/testing
 test/ # this is not used anyway
 # Don't save test profiling
 prof/*
