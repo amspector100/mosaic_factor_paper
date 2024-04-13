@@ -30,7 +30,7 @@ COLUMNS = [
 	'T',
 	'runtime',
 ]
-L_FILEPATH = "../data/sim_inputs/L.npy"
+L_FILEPATH = "../data/bfre_cache/simulation_exposures.npy"
 
 def sample_data(n, seed, rho, sparsity, L):
 	p, k = L.shape

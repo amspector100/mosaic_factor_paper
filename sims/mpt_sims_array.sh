@@ -27,4 +27,4 @@ MAIN_ARGS="
 
 module load python/3.9
 module load py-numpy/1.20.3_py39
-python3.9 mpt_sim.py $MAIN_ARGS
+python3.9 main_sims.py $MAIN_ARGS
