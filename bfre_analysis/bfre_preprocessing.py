@@ -67,7 +67,7 @@ def read_csv_progress_bar(file, chunksize=10, **kwargs):
 
 def load_data(
 	industry='',
-	null_prop_thresh=0.0,
+	null_prop_thresh=0.05,
 	cache_path=CACHE_DIR,
 	which_factors='all',
 	min_assets_per_industry=10,
@@ -97,10 +97,8 @@ def load_data(
 	industries = pd.read_csv(f"{CACHE_DIR}/industries.csv", index_col=0)['Industry']
 	null_props = pd.read_csv(f"{CACHE_DIR}/null_proportions.csv", index_col=0)['null_prop']
 	outcomes = pd.read_csv(f"{CACHE_DIR}/returns.csv", index_col=0)
+	market_caps = pd.read_csv(f"{CACHE_DIR}/market_caps.csv", index_col=0, dtype=float)
 	outcomes.index = pd.to_datetime(outcomes.index)
-	# outcomes.index.map(lambda x: datetime.datetime(
-	# 		year=int(str(x)[0:4]), month=int(str(x)[4:6]), day=int(str(x)[6:])
-	# ))
 	# glues indices and assets together
 	aind = pd.Series(
 		outcomes.columns, index=np.arange(len(outcomes.columns))
@@ -113,6 +111,7 @@ def load_data(
 	xinds = np.where(outcomes.index >= start_date)[0]
 	exposures = exposures[xinds]
 	outcomes = outcomes.iloc[xinds]
+	market_caps = market_caps.iloc[xinds]
 
 	### find desired subset of assets
 	industry = str(industry).upper()
@@ -166,6 +165,7 @@ def load_data(
 		null_props=null_props[assets],
 		factor_cols=factor_cols,
 		active_subset=active_subset,
+		market_caps=market_caps[assets],
 	)
 
 

@@ -5,13 +5,13 @@ data/bfre/
 data/sim_inputs/
 data/bfre_cache/
 data/bfre_results/
+bfre_analysis/preplot_data/
 scratch/
 sim_data/
-docs/build/
-docs/dir/
+test/
 plots/
-bfre_analysis/bfre_preprocessing.ipynb # only used for debugging/testing
-test/ # this is not used anyway
+bfre_analysis/bfre_preprocessing.ipynb
+transfer.sh
 # Don't save test profiling
 prof/*
 proftest/*
