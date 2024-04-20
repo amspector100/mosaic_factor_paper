@@ -30,6 +30,7 @@ from plotnine import *
 
 DATA_DIR = "../../bfre_data"
 CACHE_DIR = "../data/bfre_cache"
+TILING_DIR = "../data/original_tilings"
 DEFAULT_NROWS = 100000
 
 MANUAL_REMOVAL = ['LIBERTY BROADBAND SR.C', "LIBERTY MDA.SR.C LBRTY. SIRIUSXM", "DISCOVERY SERIES C"]
@@ -72,8 +73,11 @@ def load_data(
 	which_factors='all',
 	min_assets_per_industry=10,
 	active_null_prop_thresh=0.95,
-	start_date=datetime.datetime(2017, 1, 1),
+	start_date=datetime.datetime(2013, 1, 1),
 	to_exclude=None,
+	use_original_tilings=True,
+	cache_dir=CACHE_DIR,
+	tiling_dir=TILING_DIR,
 ):
 	"""
 	Parameters
@@ -92,38 +96,72 @@ def load_data(
 		Must be present this % of the time to be in the "active set".
 	to_exclude : str
 		Excludes assets whose industry contains this string
+	use_original_tilings : bool
+		If True, use the tilings for the original analysis rather than randomly
+		generating a new set. This is worth doing since the ``mosaicperm`` package
+		has changed over time to generate tilings in a slightly different way, yielding
+		qualitatively similar but non-identical results.
 	"""
 	# Read data
-	industries = pd.read_csv(f"{CACHE_DIR}/industries.csv", index_col=0)['Industry']
-	null_props = pd.read_csv(f"{CACHE_DIR}/null_proportions.csv", index_col=0)['null_prop']
-	outcomes = pd.read_csv(f"{CACHE_DIR}/returns.csv", index_col=0)
-	market_caps = pd.read_csv(f"{CACHE_DIR}/market_caps.csv", index_col=0, dtype=float)
+	industries = pd.read_csv(f"{cache_dir}/industries.csv", index_col=0)['Industry']
+	null_props = pd.read_csv(f"{cache_dir}/null_proportions.csv", index_col=0)['null_prop']
+	outcomes = pd.read_csv(f"{cache_dir}/returns.csv", index_col=0)
 	outcomes.index = pd.to_datetime(outcomes.index)
+
+	# Possibly read original tilings
+	tiling_path = f"{tiling_dir}/{industry}.npy"
+	if use_original_tilings:
+		if os.path.exists(tiling_path):
+			tiling = mp.tilings.Tiling.load(tiling_path)
+			assets = np.load(f"{tiling_dir}/{industry}_assets.npy").astype(str)
+		else:
+			warnings.warn(f"Could not find original tiling for {industry}.")
+			tiling = None
+			assets = None
+	else:
+		tiling = None
+		assets = None
+
 	# glues indices and assets together
 	aind = pd.Series(
 		outcomes.columns, index=np.arange(len(outcomes.columns))
 	)
 	# read exposures
-	exposures = np.load(f"{CACHE_DIR}/exposures.npy")
-	factor_cols = np.load(f"{CACHE_DIR}/factor_cols.npy")
+	exposures = np.load(f"{cache_dir}/exposures.npy")
+	factor_cols = np.load(f"{cache_dir}/factor_cols.npy")
 
-	## find desired subset of outcomes
+	## find desired subset of timepoints
 	xinds = np.where(outcomes.index >= start_date)[0]
 	exposures = exposures[xinds]
 	outcomes = outcomes.iloc[xinds]
-	market_caps = market_caps.iloc[xinds]
+	if tiling is not None:
+		start_ind = int(xinds.min())
+		new_tiling = []
+		for batch, group in tiling:
+			if np.any(batch >= start_ind):
+				new_tiling.append((batch[batch >= start_ind] - start_ind, group))
+		tiling = mp.tilings.Tiling(new_tiling)
+
 
 	### find desired subset of assets
-	industry = str(industry).upper()
-	if len(industry) > 0:
-		assets = sorted(
-			industries.index[industries.apply(lambda x: x[0:len(industry)] == industry)].tolist()
-		)
-	else:
-		assets = industries.index.tolist()
+	# Subset by industry
+	if assets is None:
+		industry = str(industry).upper()
+		if len(industry) > 0:
+			assets = sorted(
+				industries.index[industries.apply(lambda x: x[0:len(industry)] == industry)].tolist()
+			)
+		else:
+			assets = industries.index.tolist()
+		# Threshold by null proportion
+		assets = [asset for asset in assets if (1 - null_props[asset]) > null_prop_thresh]
+		# Sort
+		assets = sorted(assets)
+
+	# Exclude some industries sometimes
 	if to_exclude is not None:
 		assets = [asset for asset in assets if to_exclude not in industries[asset]]
-	assets = [asset for asset in assets if (1 - null_props[asset]) > null_prop_thresh]
+	
 	# indices for exposures
 	indices = aind.index[aind.isin(assets)].values
 	exposures = exposures[:, indices, :]
@@ -165,7 +203,7 @@ def load_data(
 		null_props=null_props[assets],
 		factor_cols=factor_cols,
 		active_subset=active_subset,
-		market_caps=market_caps[assets],
+		tiles=tiling,
 	)
 
 

@@ -10,6 +10,7 @@ scratch/
 sim_data/
 test/
 plots/
+data/original_tilings/
 bfre_analysis/bfre_preprocessing.ipynb
 transfer.sh
 # Don't save test profiling
