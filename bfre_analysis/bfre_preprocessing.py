@@ -30,6 +30,7 @@ from plotnine import *
 
 DATA_DIR = "../../bfre_data"
 CACHE_DIR = "../data/bfre_cache"
+PLACEHOLDER_DIR = "../data/bfre_placeholder"
 TILING_DIR = "../data/original_tilings"
 DEFAULT_NROWS = 100000
 
@@ -69,14 +70,14 @@ def read_csv_progress_bar(file, chunksize=10, **kwargs):
 def load_data(
 	industry='',
 	null_prop_thresh=0.05,
-	cache_path=CACHE_DIR,
 	which_factors='all',
 	min_assets_per_industry=10,
 	active_null_prop_thresh=0.95,
 	start_date=datetime.datetime(2013, 1, 1),
 	to_exclude=None,
 	use_original_tilings=True,
-	cache_dir=CACHE_DIR,
+	cache_dir=None,
+	use_placeholder=False,
 	tiling_dir=TILING_DIR,
 ):
 	"""
@@ -86,7 +87,7 @@ def load_data(
 		Specifies the industry to analyze.
 	null_prop_thresh : int
 		Only include assets if they are present more than this % of the time.
-	cache_path : str
+	cache_dir : str
 		Location of the cached data.
 	factors : str
 		one of 'all', 'industry', or 'style'
@@ -102,11 +103,20 @@ def load_data(
 		has changed over time to generate tilings in a slightly different way, yielding
 		qualitatively similar but non-identical results.
 	"""
+	# Default directory
+	if use_placeholder:
+		use_original_tilings = False
+	if cache_dir is None and use_placeholder:
+		cache_dir = PLACEHOLDER_DIR
+	if cache_dir is None and not use_placeholder:
+		cache_dir = CACHE_DIR
+
 	# Read data
 	industries = pd.read_csv(f"{cache_dir}/industries.csv", index_col=0)['Industry']
 	null_props = pd.read_csv(f"{cache_dir}/null_proportions.csv", index_col=0)['null_prop']
 	outcomes = pd.read_csv(f"{cache_dir}/returns.csv", index_col=0)
 	outcomes.index = pd.to_datetime(outcomes.index)
+	outcomes.columns = outcomes.columns.astype(str)
 
 	# Possibly read original tilings
 	tiling_path = f"{tiling_dir}/{industry}.npy"

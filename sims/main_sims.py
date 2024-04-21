@@ -31,6 +31,7 @@ COLUMNS = [
 	'runtime',
 ]
 L_FILEPATH = "../data/bfre_cache/simulation_exposures.npy"
+L_PLACEHOLDER_FILEPATH = "../data/bfre_placeholder/simulation_exposures.npy"
 
 def sample_data(n, seed, rho, sparsity, L):
 	p, k = L.shape
@@ -197,17 +198,11 @@ def main(args):
 	args['ldate'] = args.get("ldate", [20200417])
 
 	## Load exposures
-	## TODO: just push L to the cluster and put it in the sample place
-	L = np.load(L_FILEPATH)
-	# if args.get("cluster", [False])[0]:
-	# 	int_dir = create_bfre_hateps.INT_CLUSTER
-	# else:
-	# 	int_dir = create_bfre_hateps.INT_LOCAL
-	# output = create_bfre_hateps.load_hateps(
-	# 	int_dir, name='FIN'
-	# )
-	# date_index = np.where(output['dates'] == 20200417)[0]
-	# L = output['Ls'][np.argmin(np.abs(output['nstarts'] - date_index))]
+	if os.path.exists(L_FILEPATH):
+		L = np.load(L_FILEPATH)
+	else:
+		print("Simulation exposures are not available---using placeholder instead.")
+		L = np.load(L_PLACEHOLDER_FILEPATH)
 
 	## Key defaults go here
 	args['n'] = args.get("n", [100])

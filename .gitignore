@@ -12,6 +12,8 @@ test/
 plots/
 data/original_tilings/
 bfre_analysis/bfre_preprocessing.ipynb
+# the following is too large to save---downloaded from gdrive
+data/bfre_placeholder/exposures.npy
 transfer.sh
 # Don't save test profiling
 prof/*
