@@ -21,6 +21,7 @@ import scipy.sparse as sp
 import pandas as pd
 import datetime 
 from tqdm.auto import tqdm
+from typing import Optional
 
 # Plotting
 import matplotlib.pyplot as plt
@@ -28,84 +29,159 @@ import seaborn as sns
 import warnings
 from plotnine import *
 
-DATA_DIR = "../../bfre_data"
+DATA_DIR = "../data/bfre"
 CACHE_DIR = "../data/bfre_cache"
 PLACEHOLDER_DIR = "../data/bfre_placeholder"
-TILING_DIR = "../data/original_tilings"
-DEFAULT_NROWS = 100000
+DEFAULT_NROWS = None # useful for debugging since reading the data takes a while
 
-MANUAL_REMOVAL = ['LIBERTY BROADBAND SR.C', "LIBERTY MDA.SR.C LBRTY. SIRIUSXM", "DISCOVERY SERIES C"]
-def remove_redundant_assets(assets, asset2names):
+###############################################
+###### Test statistic for this analysis #######
+## This handles missing assets appropriately ##
+###############################################
+def compute_active_subset(
+	residuals: np.array, 
+	subset: Optional[np.array]=None,
+	thresh: float=0.0,
+):
 	"""
-	Redundancies:
-	e.g. remove "GOOGLE 'C'" if "GOOGLE A" is present
+	Discards residuals which are missing 
+	(imputed as exactly zero) during
+	the relevant time period.
+	"""
+	if subset is None:
+		subset = np.arange(residuals.shape[1])
+	# Threshold
+	zero_props = np.mean(residuals == 0, axis=0)
+	subset = set(subset.tolist()).intersection(
+		list(set(np.where(zero_props <= thresh)[0]))
+	)
+	subset = subset.intersection(
+		set(list(np.where(residuals.std(axis=0) > 0)[0]))
+	)
+	return np.array(list(subset)).astype(int)
+
+def mmc_stat(
+	residuals: np.array, 
+	**kwargs
+) -> float:
+	"""
+	Mean maximum (absolute) correlation statistic.
+	
+	Parameters
+	----------
+	residuals : np.array
+		(n_obs, n_subjects) array of residuals
+	kwargs : dict
+		kwargs for ``compute_active_subset`` preprocessing function.
+	"""
+	subset = compute_active_subset(residuals, **kwargs)
+	# max correlation
+	C = np.corrcoef(residuals[:, subset].T)
+	C -= np.eye(len(subset))
+	maxcorrs = np.abs(C).max(axis=0)
+	return np.mean(maxcorrs)
+
+#####################
+### PREPROCESSING ###
+#####################
+REDUNDANT = [
+	### TECH
+	'Z913Y29A4', # DISCOVERY SERIES C; duplicate of Z915NQMN5 (WARNER BROS DISCOVERY SERIES A)
+	'Z91NAZR05', # LIBERTY BROADBAND SR.C; duplicate of Z91NAZQV8 (LIBERTY BROADBAND SR.A)
+	'Z91ZXUML3', # LIBERTY MDA.SR.C LBRTY. SIRIUSXM; duplicate of Z91ZXUEU2 (LIBERTY MDA.SR.A LBRTY. SIRIUSXM)
+	### ENERGY
+	'Z915MB219', # ALLIANCE RSO.PTNS.L P UT LP.; duplicate of Z915N9CG9 (ALLIANCE HOLDINGS GP)
+	'Z915MAK78', # DENBURY RES., duplicate of Z94YJU272 (DENBURY)
+	'Z923V4623', # EXTRACTION OIL &.GAS, duplicate of Z956QDZ27 (EXTRACTION OIL GAS)
+	'Z915PDZ08', # C&J ENERGY SERVICES, duplicate of Z926JN0W8 (C&J ENERGY SVS.)
+	'Z91LU5J10', # TRANSOCEAN PARTNERS, duplicate of Z917GPF17 (TRANSOCEAN)
+	# There are many other duplicates in the energy sector---this is taken care of by dropping
+	# the EGYOGINT factor in the actual analysis.
+	### FIN
+	'Z9196JFY6', # HEALTHCARE REALTY TRUST A, duplicate of Z913Y5LD7 (HEALTHCARE REAL.TST.)
+	## ITC
+	'Z95WJV2F5', # MOBILEYE GLOBAL A, duplicate of Z91LSL9K7 (MOBILEYE)
+	'Z94V0ST82', # PERSHING SQUARE TONTINE HOLDINGS UNITS, duplicate of Z94Y26BU2 (PERSHING SQUARE TONTINE HOLDINGS A)
+	## CDI
+	'Z913Y2WC4', # COMCAST SPECIAL 'A', duplicate of Z915M7ZV6 (COMCAST A)
+	'Z915NSRS5', # SPECTRUM BRAND HOLDINGS, duplicate of  Z915NYMK4 (SPECTRUM BRANDS HOLDINGS)
+	## IND 
+	'Z915M99B5', #HEICO NEW 'A'; duplicate of Z913Y5LG0 (HEICO)
+	'Z95CZAPF2', #HERTZ GLOBAL HLDGS; duplicate of Z9219VF89 (HERTZ GLOBAL HOLDINGS)
+]
+def remove_redundant_assets(assets, asset2names, outcomes):
+	"""
+	Removes duplicate assets which overlap. 
+	Also removes "GOOGLE 'C'" if "GOOGLE A" is present.
 	"""
 	anames = asset2names[assets].copy()
-	anames = anames.str.replace("'", "")
 	to_remove = []
 	to_remove_inds = []
-	for j, asset in enumerate(anames):
-		if " " not in asset:
+	# exact duplicates
+	nuq = np.unique(anames)
+	to_drop = np.zeros(len(anames), dtype=bool)
+	for name in nuq:
+		flags = anames == name
+		inds = np.where(flags)[0]
+		if np.sum(flags) > 1:
+			# Check for overlap; if overlap, drop asset with least missing data
+			missing_pattern = np.isnan(outcomes)[:, inds]
+			if np.any((~missing_pattern).sum(axis=1) > 1):
+				nprops = missing_pattern.mean(axis=0)
+				to_drop[flags] = True
+				to_drop[inds[np.argmin(nprops)]] = False
+	to_remove.extend(anames.values[to_drop].tolist())
+	to_remove_inds.extend(np.where(to_drop)[0])
+	print(f"Removed {len(to_remove)} exact duplicates.")
+	# Remove Google 'C' if Google A is present.
+	# Parsing so that 'A' becomes A, CL.A becomes A, SR. becomes A, etc.
+	anames = anames.str.replace("'", "", regex=False)
+	anames = anames.str.replace("CL.", " ", regex=False)
+	anames = anames.str.replace("SR.", " ", regex=False)
+	for j, (asset_code, asset_name) in enumerate(zip(assets, anames)):
+		if j in to_remove_inds:
 			continue
-		end = asset.split(" ")[-1]
-		if len(end) == 1:
-			core = asset[:-1]
-			alts = anames[(anames.str.contains(core)) & (anames != asset)]
-			if np.any(np.array([asset > alt for alt in alts])):
+		end = asset_name.split(" ")[-1]
+		if len(end) == 1 and len(asset_name) > 1:
+			core = asset_name[:-2] # core name of the asset after removing " A" or " B"
+			# Check if other assets have the same core name; if so deduplicate
+			alts = anames[(anames.str.contains(core)) & (anames != asset_name)]
+			if np.any(np.array([asset_name >= alt for alt in alts])):
 				to_remove.append(anames.index[j])
 				to_remove_inds.append(j)
 				continue
-		if asset in MANUAL_REMOVAL:
+		# manual entries
+		if asset_code in REDUNDANT:
 			to_remove.append(anames.index[j])
 			to_remove_inds.append(j)
+			continue
 	return to_remove, to_remove_inds
-
-
-def read_csv_progress_bar(file, chunksize=10, **kwargs):
-	df_chunks = []
-	for df_chunk in tqdm(pd.read_csv(file, chunksize=chunksize, **kwargs)):
-		df_chunks.append(df_chunk)
-	return pd.concat(df_chunks, axis=0)
 
 def load_data(
 	industry='',
-	null_prop_thresh=0.05,
 	which_factors='all',
-	min_assets_per_industry=10,
-	active_null_prop_thresh=0.95,
-	start_date=datetime.datetime(2013, 1, 1),
+	start_date=datetime.datetime(2017, 1, 1),
 	to_exclude=None,
-	use_original_tilings=True,
 	cache_dir=None,
 	use_placeholder=False,
-	tiling_dir=TILING_DIR,
 ):
 	"""
 	Parameters
 	----------
-	industry : str
-		Specifies the industry to analyze.
-	null_prop_thresh : int
-		Only include assets if they are present more than this % of the time.
-	cache_dir : str
-		Location of the cached data.
-	factors : str
+	industry : str | list
+		Specifies the industry/industries to analyze.
+	which_factors : str
 		one of 'all', 'industry', or 'style'
-	min_assets_per_industry : int
-		Minimum number of assets in the industry to be part of the "active set""
-	active_null_prop_thresh : int
-		Must be present this % of the time to be in the "active set".
-	to_exclude : str
+	start_date : datetime.datetime
+		Starting date of the analysis.
+	to_exclude : str | list
 		Excludes assets whose industry contains this string
-	use_original_tilings : bool
-		If True, use the tilings for the original analysis rather than randomly
-		generating a new set. This is worth doing since the ``mosaicperm`` package
-		has changed over time to generate tilings in a slightly different way, yielding
-		qualitatively similar but non-identical results.
+	cache_dir : str
+		Location of the cached data
+	use_placeholder : bool
+		If True, uses publicly available placeholder data.
 	"""
 	# Default directory
-	if use_placeholder:
-		use_original_tilings = False
 	if cache_dir is None and use_placeholder:
 		cache_dir = PLACEHOLDER_DIR
 	if cache_dir is None and not use_placeholder:
@@ -113,24 +189,9 @@ def load_data(
 
 	# Read data
 	industries = pd.read_csv(f"{cache_dir}/industries.csv", index_col=0)['Industry']
-	null_props = pd.read_csv(f"{cache_dir}/null_proportions.csv", index_col=0)['null_prop']
 	outcomes = pd.read_csv(f"{cache_dir}/returns.csv", index_col=0)
 	outcomes.index = pd.to_datetime(outcomes.index)
 	outcomes.columns = outcomes.columns.astype(str)
-
-	# Possibly read original tilings
-	tiling_path = f"{tiling_dir}/{industry}.npy"
-	if use_original_tilings:
-		if os.path.exists(tiling_path):
-			tiling = mp.tilings.Tiling.load(tiling_path)
-			assets = np.load(f"{tiling_dir}/{industry}_assets.npy").astype(str)
-		else:
-			warnings.warn(f"Could not find original tiling for {industry}.")
-			tiling = None
-			assets = None
-	else:
-		tiling = None
-		assets = None
 
 	# glues indices and assets together
 	aind = pd.Series(
@@ -144,38 +205,38 @@ def load_data(
 	xinds = np.where(outcomes.index >= start_date)[0]
 	exposures = exposures[xinds]
 	outcomes = outcomes.iloc[xinds]
-	if tiling is not None:
-		start_ind = int(xinds.min())
-		new_tiling = []
-		for batch, group in tiling:
-			if np.any(batch >= start_ind):
-				new_tiling.append((batch[batch >= start_ind] - start_ind, group))
-		tiling = mp.tilings.Tiling(new_tiling)
-
 
 	### find desired subset of assets
-	# Subset by industry
-	if assets is None:
-		industry = str(industry).upper()
-		if len(industry) > 0:
-			assets = sorted(
-				industries.index[industries.apply(lambda x: x[0:len(industry)] == industry)].tolist()
-			)
-		else:
-			assets = industries.index.tolist()
-		# Threshold by null proportion
-		assets = [asset for asset in assets if (1 - null_props[asset]) > null_prop_thresh]
-		# Sort
-		assets = sorted(assets)
+	# Subset by industry (allowing multiple industries)
+	if isinstance(industry, str):
+		industry = [industry]
+	industry = [str(x).upper() for x in industry]
+	# If industry=[''], use the full set of assets
+	if len(industry) == 1 and len(industry[0]) == 0:
+		assets = industries.index.tolist()
+	# Otherwise actually find subset
+	else:
+		flags = industries.apply(lambda x: x[0:len(industry[0])] == industry[0])
+		for indx in industry:
+			flags = flags | industries.apply(lambda x: x[0:len(indx)] == indx)
+		assets = sorted(industries.index[flags].tolist())
+	# Sort
+	assets = sorted(assets)
 
-	# Exclude some industries sometimes
+	# Potentially exclude some sub-industries.
+	# This is useful since we exclude EGYOGINT and FINREAL in some analyses.
 	if to_exclude is not None:
-		assets = [asset for asset in assets if to_exclude not in industries[asset]]
-	
+		if isinstance(to_exclude, str):
+			assets = [asset for asset in assets if to_exclude not in industries[asset]]
+		elif isinstance(to_exclude, list):
+			for x in to_exclude:
+				assets = [asset for asset in assets if x not in industries[asset]]
+		else:
+			raise ValueError("to_exclude must be str or list")
+
 	# indices for exposures
 	indices = aind.index[aind.isin(assets)].values
 	exposures = exposures[:, indices, :]
-	
 
 	### find desired subset of factors
 	which_factors = str(which_factors).lower()
@@ -197,26 +258,13 @@ def load_data(
 	factor_cols = factor_cols[non_redundant]
 	exposures = exposures[:, :, non_redundant]
 
-	### suggest active subset to increase power
-	active_subset = []
-	for i, asset in enumerate(assets):
-		if np.sum(industries == industries[asset]) >= min_assets_per_industry:
-			if 1 - null_props[asset] > active_null_prop_thresh:
-				active_subset.append(i)
-	active_subset = np.array(active_subset).astype(int)
-
 	# Return output
 	return dict(
 		outcomes=outcomes[assets],
 		exposures=exposures,
 		industries=industries[assets],
-		null_props=null_props[assets],
 		factor_cols=factor_cols,
-		active_subset=active_subset,
-		tiles=tiling,
 	)
-
-
 
 def main(args):
 	# Parse argument (nrows is helpful for debugging)
@@ -231,13 +279,6 @@ def main(args):
 		['2013', '2018', '2021'], ['2017', '2020', '2023']
 	):
 		print(f"Loading data from {ystart}-{yend} at {elapsed(t0)}.")
-		# df = read_csv_progress_bar(
-		# 	file=f'{DATA_DIR}/bfre_factor_model_data_{ystart}_{yend}.csv',
-		# 	chunksize=10,
-		# 	header=[0,1],
-		# 	index_col=0,
-		# 	nrows=nrows,
-		# )
 		df = pd.read_csv(
 			f'{DATA_DIR}/bfre_factor_model_data_{ystart}_{yend}.csv',
 			header=[0,1], index_col=0, nrows=nrows,
@@ -247,32 +288,36 @@ def main(args):
 	data = pd.concat(data, axis='index')
 	all_assets = np.sort(np.unique([x[0] for x in data.columns if x[0][0] == 'Z']))
 
-	# remove redundant assets
+	# Load map from assets --> names and vice versa
 	asset_names = pd.read_csv(f"{DATA_DIR}/assets_id_to_name.csv").rename(
 		columns={"invariant_id":"ASSET", "name_sec":"name"}
 	)
 	asset2names = asset_names.set_index("ASSET")['name']
 	names2asset = asset_names.set_index("name")['ASSET']
-	to_remove, _ = remove_redundant_assets(all_assets, asset2names)
-	all_assets = sorted(list(set(all_assets) - set(to_remove)))
 
-	## 2. Factor columns and date parsing
-	factor_cols = np.sort([c for c in data['Z913Y29A4'].columns if c not in ['EXRETURN', 'SRET', 'CAPT']])
-	k = len(factor_cols)
+	## 2. Create returns (outcomes)
+	print(f"Creating returns at {elapsed(t0)}.")
+	# date parsing
 	data.index = data.index.map(lambda x: datetime.datetime(
 			year=int(str(x)[0:4]), month=int(str(x)[4:6]), day=int(str(x)[6:])
 	))
-	if nrows == DEFAULT_NROWS:
-		np.save(f"{CACHE_DIR}/factor_cols.npy", factor_cols)
-
-	## 3. Returns (outcomes)
-	print(f"Creating returns at {elapsed(t0)}.")
 	returns = data[[(asset, "EXRETURN") for asset in all_assets]].copy()
 	returns.columns = returns.columns.get_level_values(0)
 	returns.columns.name = 'ASSET'
 	returns.index.name = 'Date'
-	if nrows == DEFAULT_NROWS:
+	# remove duplicate assets
+	to_remove, _ = remove_redundant_assets(assets=all_assets, asset2names=asset2names, outcomes=returns.values)
+	all_assets = sorted(list(set(all_assets) - set(to_remove)))
+	returns = returns[all_assets]
+	# save
+	if nrows is None:
 		returns.to_csv(f"{CACHE_DIR}/returns.csv")
+
+	## 3. Factor columns
+	factor_cols = np.sort([c for c in data['Z913Y29A4'].columns if c not in ['EXRETURN', 'SRET', 'CAPT']])
+	k = len(factor_cols)
+	if nrows is None:
+		np.save(f"{CACHE_DIR}/factor_cols.npy", factor_cols)
 
 	## 4. Create exposures
 	print(f"Creating exposures at {elapsed(t0)}.")
@@ -282,11 +327,11 @@ def main(args):
 		exposures.append(exp)
 
 	exposures = np.stack(exposures, axis=-1)
-	if nrows == DEFAULT_NROWS:
+	if nrows is None:
 		np.save(f"{CACHE_DIR}/exposures.npy", exposures)
 
 	## 5. Industry markers
-	if nrows == DEFAULT_NROWS:
+	if nrows is None:
 		print(f"Creating industries at {elapsed(t0)}.")
 	exp2 = exposures.copy()
 	exp2[np.isnan(exp2)] = 0
@@ -297,27 +342,14 @@ def main(args):
 	ind_means = data[all_assets].fillna(0).mean(axis=0).unstack()
 	industries = ind_means[ims].idxmax(axis=1)
 	industries.name = 'Industry'
-	if nrows == DEFAULT_NROWS:
+	if nrows is None:
 		industries.to_csv(f"{CACHE_DIR}/industries.csv")
 
-	## 6. Null proportions
-	print(f"Creating null_props at {elapsed(t0)}.")
-	null_props = np.zeros(len(all_assets))
-	for i, asset in enumerate(all_assets):
-		null_props[i] = np.mean(
-			np.any(np.isnan(exposures[:, i]), axis=-1) | 
-			returns[asset].isnull().values
-		)
-	null_props = pd.Series(null_props, index=all_assets)
-	null_props.index.name = 'ASSET'
-	null_props.name = 'null_prop'
-	if nrows == DEFAULT_NROWS:
-		null_props.to_csv(f"{CACHE_DIR}/null_proportions.csv")
-
-	## 7. Exposure subset for simulations
-	if nrows == DEFAULT_NROWS:
-		target = datetime.datetime(year=2020, month=4, day=17)
+	## 6. Exposure subset for simulations
+	if nrows is None:
+		target = datetime.datetime(year=2020, month=5, day=21)
 	else:
+		# Only used for debugging
 		target = datetime.datetime(year=2018, month=1, day=2)
 	ind = np.where(returns.index == target)[0].item()
 	sim_exposures = exposures[ind].copy()
@@ -327,14 +359,13 @@ def main(args):
 		if industries[asset][0:3] == 'FIN'
 	])
 
-	# get rid of assets which have all nan exposures
+	# get rid of assets which have only nan exposures on this particular day
 	sim_exposures = sim_exposures[fin_inds].copy()
 	sim_exposures = sim_exposures[~np.all(np.isnan(sim_exposures), axis=1)].copy()
 	sim_exposures[np.isnan(sim_exposures)] = 0
 	sim_exposures = sim_exposures[:, ~np.all(sim_exposures == 0, axis=0)]
-	if nrows == DEFAULT_NROWS:
+	if nrows is None:
 		np.save(f"{CACHE_DIR}/simulation_exposures.npy", sim_exposures)
-
 
 if __name__ == '__main__':
 	main(sys.argv)

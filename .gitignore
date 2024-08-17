@@ -5,6 +5,7 @@ data/bfre/
 data/sim_inputs/
 data/bfre_cache/
 data/bfre_results/
+data/scratch_results/
 bfre_analysis/preplot_data/
 scratch/
 sim_data/
