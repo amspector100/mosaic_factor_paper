@@ -23,6 +23,7 @@ COLUMNS = [
 	'k',
 	'sparsity',
 	'rho',
+	'eps_dist',
 	'test_stat',
 	'test_stat_index',
 	'method',
@@ -33,18 +34,27 @@ COLUMNS = [
 L_FILEPATH = "../data/bfre_cache/simulation_exposures.npy"
 L_PLACEHOLDER_FILEPATH = "../data/bfre_placeholder/simulation_exposures.npy"
 
-def sample_data(n, seed, rho, sparsity, L):
+def sample_data(n, seed, rho, sparsity, L, eps_dist):
 	p, k = L.shape
 	np.random.seed(seed)
+	# scipy dist used to draw samples
+	if eps_dist == 'laplace':
+		eps_dist = stats.laplace()
+	elif eps_dist == 'tdist':
+		eps_dist = stats.t(df=4)
+	elif eps_dist == 'gaussian':
+		eps_dist = stats.norm()
+	else:
+		raise ValueError(f"Unrecognized eps_dist={eps_dist}.")
 	# Factor returns
-	X = stats.laplace.rvs(size=(n,k))
+	X = eps_dist.rvs(size=(n,k))
 	# Alternative
 	s0 = max(2, int(np.ceil(sparsity * p)))
 	non_nulls = np.random.choice(np.arange(p), s0, replace=False)
 	v = np.zeros(p); v[non_nulls] = 1 / np.sqrt(len(non_nulls))
 	# Returns
-	gamma = stats.laplace.rvs(size=(n,p))
-	Z = stats.laplace.rvs(size=n)
+	gamma = eps_dist.rvs(size=(n,p))
+	Z = eps_dist.rvs(size=n)
 	eps = gamma + rho * Z.reshape(-1, 1) * v.reshape(1, -1)
 	Y = X @ L.T + eps
 	return dict(
@@ -128,12 +138,12 @@ def split_mse_stats_v2(
 	return 1 - oos_errors / baseline_error
 
 def single_seed_sim(
-	seed, n, L, sparsity, rho, t0, **args
+	seed, n, L, sparsity, rho, eps_dist, t0, **args
 ):
 	# arguments and defaults
 	p, k = L.shape
 	dgp_args = [
-		seed, n, p, k, sparsity, rho
+		seed, n, p, k, sparsity, rho, eps_dist
 	]
 	# method arguments
 	msg = f"At seed={seed}, n={n}, sparsity={sparsity}, rho={rho}"
@@ -142,7 +152,7 @@ def single_seed_sim(
 	sys.stdout.flush()
 
 	# create data
-	data = sample_data(n=n, seed=seed, rho=rho, sparsity=sparsity, L=L)
+	data = sample_data(n=n, seed=seed, rho=rho, sparsity=sparsity, L=L, eps_dist=eps_dist)
 
 	# initialize output
 	output = []
@@ -192,14 +202,10 @@ def main(args):
 	# parse job id
 	job_id = int(args.pop("job_id", [0])[0])
 
-
-	# whether or not to use an estimated factor 
-	# model from the S&P as the ground truth
-	args['ldate'] = args.get("ldate", [20200417])
-
 	## Load exposures
 	if os.path.exists(L_FILEPATH):
 		L = np.load(L_FILEPATH)
+		print(L.shape)
 	else:
 		print("Simulation exposures are not available---using placeholder instead.")
 		L = np.load(L_PLACEHOLDER_FILEPATH)
@@ -208,6 +214,7 @@ def main(args):
 	args['n'] = args.get("n", [100])
 	args['rho'] = args.get("rho", [0])
 	args['sparsity'] = args.get("sparsity", [0.0])
+	args['eps_dist'] = args.get("eps_dist", ['laplace'])
 
 	# Save args, create output dir
 	output_dir = utilities.create_output_directory(args, dir_type=DIR_TYPE)
