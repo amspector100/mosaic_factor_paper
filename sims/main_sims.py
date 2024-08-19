@@ -31,8 +31,8 @@ COLUMNS = [
 	'T',
 	'runtime',
 ]
-L_FILEPATH = "../data/bfre_cache/simulation_exposures.npy"
-L_PLACEHOLDER_FILEPATH = "../data/bfre_placeholder/simulation_exposures.npy"
+L_FILEPATH = "../data/bfre_cache/simulation_exposures_FIN.npy"
+L_PLACEHOLDER_FILEPATH = "../data/bfre_placeholder/simulation_exposures_FIN.npy"
 
 def sample_data(n, seed, rho, sparsity, L, eps_dist):
 	p, k = L.shape
@@ -205,7 +205,6 @@ def main(args):
 	## Load exposures
 	if os.path.exists(L_FILEPATH):
 		L = np.load(L_FILEPATH)
-		print(L.shape)
 	else:
 		print("Simulation exposures are not available---using placeholder instead.")
 		L = np.load(L_PLACEHOLDER_FILEPATH)
