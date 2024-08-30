@@ -12,18 +12,17 @@
 NREPS=2 # make sure this is the same as the job array step size
 NPROC=1
 
-
-# todo:
-# add back test_stat = [maxcorr,mcpi,invtrace,fisher,sparse_fisher]
 MAIN_ARGS="
-        --n [100,150]
-        --sparsity [0.05,0.15,0.5]
-        --rho [0,1,2,3,4,5,6,7] 
+        --n [50]
+        --sparsity [0.05,0.15,0.3]
+        --rho [0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7]
         --reps $NREPS
         --num_processes $NPROC
         --seed_start $SLURM_ARRAY_TASK_ID
         --job_id $SLURM_ARRAY_JOB_ID
+        --eps_dist tdist
 "
+
 
 module load python/3.9
 module load py-numpy/1.20.3_py39

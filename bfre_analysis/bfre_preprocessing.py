@@ -352,20 +352,27 @@ def main(args):
 		# Only used for debugging
 		target = datetime.datetime(year=2018, month=1, day=2)
 	ind = np.where(returns.index == target)[0].item()
-	sim_exposures = exposures[ind].copy()
-	# subset to financial assets
-	fin_inds = np.array([
-		i for i, asset in enumerate(all_assets) 
-		if industries[asset][0:3] == 'FIN'
-	])
-
-	# get rid of assets which have only nan exposures on this particular day
-	sim_exposures = sim_exposures[fin_inds].copy()
-	sim_exposures = sim_exposures[~np.all(np.isnan(sim_exposures), axis=1)].copy()
-	sim_exposures[np.isnan(sim_exposures)] = 0
-	sim_exposures = sim_exposures[:, ~np.all(sim_exposures == 0, axis=0)]
-	if nrows is None:
-		np.save(f"{CACHE_DIR}/simulation_exposures.npy", sim_exposures)
+	for industry in ['FIN', 'EGY']:
+		sim_exposures = exposures[ind].copy()
+		# subset to industry-specific assets
+		sector_inds = np.array([
+			i for i, asset in enumerate(all_assets) 
+			if (industries[asset][0:3] == industry) and
+			(industries[asset] != 'EGYOGINT') # contains duplicate assets as described in the paper
+		])
+		sim_exposures = sim_exposures[sector_inds].copy()
+		# drop factors which are all zero or missing
+		# (e.g. factors for non-financial sectors should be dropped)
+		sim_exposures = sim_exposures[:, ~np.all(np.isnan(sim_exposures) | (sim_exposures == 0), axis=0)]
+		# ONLY for simulations, impute any missing exposures
+		np.random.seed(123)
+		sim_exposures[np.isnan(sim_exposures)] = np.random.choice(
+			sim_exposures[~np.isnan(sim_exposures)].flatten(),
+			np.sum(np.isnan(sim_exposures)),
+			replace=True
+		)
+		if nrows is None:
+			np.save(f"{CACHE_DIR}/simulation_exposures_{industry}.npy", sim_exposures)
 
 if __name__ == '__main__':
 	main(sys.argv)
