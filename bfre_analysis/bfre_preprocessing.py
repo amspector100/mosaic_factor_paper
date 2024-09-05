@@ -32,10 +32,9 @@ from plotnine import *
 DATA_DIR = "../data/bfre"
 CACHE_DIR = "../data/bfre_cache"
 PLACEHOLDER_DIR = "../data/bfre_placeholder"
-DEFAULT_NROWS = None # useful for debugging since reading the data takes a while
+DEFAULT_NROWS = None # useful for debugging since reading the raw data takes ~15 min
 
 ###############################################
-###### Test statistic for this analysis #######
 ## This handles missing assets appropriately ##
 ###############################################
 def compute_active_subset(
@@ -44,72 +43,55 @@ def compute_active_subset(
 	thresh: float=0.0,
 ):
 	"""
-	Discards residuals which are missing 
-	(imputed as exactly zero) during
-	the relevant time period.
+	Discards residuals which are missing.
+	(In the main analysis this is handled
+	by providing the relevant input ``subset" but
+	this function is used in the R^2 analysis.)
 	"""
 	if subset is None:
 		subset = np.arange(residuals.shape[1])
-	# Threshold
-	zero_props = np.mean(residuals == 0, axis=0)
+	# discard assets which are missing >thresh% of the time
+	nan_props = np.mean(np.isnan(residuals), axis=0)
 	subset = set(subset.tolist()).intersection(
-		list(set(np.where(zero_props <= thresh)[0]))
+		list(set(np.where(nan_props <= thresh)[0]))
 	)
 	subset = subset.intersection(
 		set(list(np.where(residuals.std(axis=0) > 0)[0]))
 	)
 	return np.array(list(subset)).astype(int)
 
-def mmc_stat(
-	residuals: np.array, 
-	**kwargs
-) -> float:
-	"""
-	Mean maximum (absolute) correlation statistic.
-	
-	Parameters
-	----------
-	residuals : np.array
-		(n_obs, n_subjects) array of residuals
-	kwargs : dict
-		kwargs for ``compute_active_subset`` preprocessing function.
-	"""
-	subset = compute_active_subset(residuals, **kwargs)
-	# max correlation
-	C = np.corrcoef(residuals[:, subset].T)
-	C -= np.eye(len(subset))
-	maxcorrs = np.abs(C).max(axis=0)
-	return np.mean(maxcorrs)
-
 #####################
 ### PREPROCESSING ###
 #####################
+# most redundancies are handled automatically, but these are coded by hand
 REDUNDANT = [
+	### HLC
+	'Z915M89N1', # BIO-RAD LABS B, duplicate of Z913Y5PL5 (BIO-RAD LABORATORIES 'A')
 	### TECH
 	'Z913Y29A4', # DISCOVERY SERIES C; duplicate of Z915NQMN5 (WARNER BROS DISCOVERY SERIES A)
 	'Z91NAZR05', # LIBERTY BROADBAND SR.C; duplicate of Z91NAZQV8 (LIBERTY BROADBAND SR.A)
 	'Z91ZXUML3', # LIBERTY MDA.SR.C LBRTY. SIRIUSXM; duplicate of Z91ZXUEU2 (LIBERTY MDA.SR.A LBRTY. SIRIUSXM)
+	'Z95WJV2F5', # MOBILEYE GLOBAL A, duplicate of Z91LSL9K7 (MOBILEYE)
+	'Z94V0ST82', # PERSHING SQUARE TONTINE HOLDINGS UNITS, duplicate of Z94Y26BU2 (PERSHING SQUARE TONTINE HOLDINGS A)
 	### ENERGY
 	'Z915MB219', # ALLIANCE RSO.PTNS.L P UT LP.; duplicate of Z915N9CG9 (ALLIANCE HOLDINGS GP)
 	'Z915MAK78', # DENBURY RES., duplicate of Z94YJU272 (DENBURY)
 	'Z923V4623', # EXTRACTION OIL &.GAS, duplicate of Z956QDZ27 (EXTRACTION OIL GAS)
 	'Z915PDZ08', # C&J ENERGY SERVICES, duplicate of Z926JN0W8 (C&J ENERGY SVS.)
 	'Z91LU5J10', # TRANSOCEAN PARTNERS, duplicate of Z917GPF17 (TRANSOCEAN)
-	# There are many other duplicates in the energy sector---this is taken care of by dropping
-	# the EGYOGINT factor in the actual analysis.
+	'Z913Y29F3', # KINDER MORGAN MAN., duplicate of Z915NT1G7 (KINDER MORGAN)
+	# Below is not exactly a duplicate but nonetheless not an interesting alternative
+	'Z9155FTD4', # MARATHON PETROLEUM, correlated with Z915MEDH6 (MARATHON OIL)
 	### FIN
 	'Z9196JFY6', # HEALTHCARE REALTY TRUST A, duplicate of Z913Y5LD7 (HEALTHCARE REAL.TST.)
-	## ITC
-	'Z95WJV2F5', # MOBILEYE GLOBAL A, duplicate of Z91LSL9K7 (MOBILEYE)
-	'Z94V0ST82', # PERSHING SQUARE TONTINE HOLDINGS UNITS, duplicate of Z94Y26BU2 (PERSHING SQUARE TONTINE HOLDINGS A)
 	## CDI
 	'Z913Y2WC4', # COMCAST SPECIAL 'A', duplicate of Z915M7ZV6 (COMCAST A)
 	'Z915NSRS5', # SPECTRUM BRAND HOLDINGS, duplicate of  Z915NYMK4 (SPECTRUM BRANDS HOLDINGS)
 	## IND 
-	'Z915M99B5', #HEICO NEW 'A'; duplicate of Z913Y5LG0 (HEICO)
-	'Z95CZAPF2', #HERTZ GLOBAL HLDGS; duplicate of Z9219VF89 (HERTZ GLOBAL HOLDINGS)
+	'Z915M99B5', # HEICO NEW 'A'; duplicate of Z913Y5LG0 (HEICO)
+	'Z95CZAPF2', # HERTZ GLOBAL HLDGS; duplicate of Z9219VF89 (HERTZ GLOBAL HOLDINGS)
 ]
-def remove_redundant_assets(assets, asset2names, outcomes):
+def remove_redundant_assets(assets, asset2names, outcomes, industries):
 	"""
 	Removes duplicate assets which overlap. 
 	Also removes "GOOGLE 'C'" if "GOOGLE A" is present.
@@ -130,7 +112,7 @@ def remove_redundant_assets(assets, asset2names, outcomes):
 				nprops = missing_pattern.mean(axis=0)
 				to_drop[flags] = True
 				to_drop[inds[np.argmin(nprops)]] = False
-	to_remove.extend(anames.values[to_drop].tolist())
+	to_remove.extend(anames.index[to_drop].tolist())
 	to_remove_inds.extend(np.where(to_drop)[0])
 	print(f"Removed {len(to_remove)} exact duplicates.")
 	# Remove Google 'C' if Google A is present.
@@ -139,7 +121,7 @@ def remove_redundant_assets(assets, asset2names, outcomes):
 	anames = anames.str.replace("CL.", " ", regex=False)
 	anames = anames.str.replace("SR.", " ", regex=False)
 	for j, (asset_code, asset_name) in enumerate(zip(assets, anames)):
-		if j in to_remove_inds:
+		if j in to_remove_inds and asset_code in to_remove:
 			continue
 		end = asset_name.split(" ")[-1]
 		if len(end) == 1 and len(asset_name) > 1:
@@ -155,6 +137,15 @@ def remove_redundant_assets(assets, asset2names, outcomes):
 			to_remove.append(anames.index[j])
 			to_remove_inds.append(j)
 			continue
+		# remove partner (shell) corps from EGYOGINT and FIN
+		# don't do this in other industries; e.g., in healthcare,
+		# "Surgery Partners" is not a shell corp. (see paper for details)
+		patterns = ['PARTNER', 'PTN', 'UNIT']
+		if industries[asset_code] in ['EGYOGINT', 'FIN']:
+			if np.any([y in asset_name for y in patterns]):
+				to_remove.append(anames.index[j])
+				to_remove_inds.append(j)
+				continue
 	return to_remove, to_remove_inds
 
 def load_data(
@@ -181,7 +172,7 @@ def load_data(
 	use_placeholder : bool
 		If True, uses publicly available placeholder data.
 	"""
-	# Default directory
+	# Default directories to load data
 	if cache_dir is None and use_placeholder:
 		cache_dir = PLACEHOLDER_DIR
 	if cache_dir is None and not use_placeholder:
@@ -197,8 +188,8 @@ def load_data(
 	aind = pd.Series(
 		outcomes.columns, index=np.arange(len(outcomes.columns))
 	)
-	# read exposures
-	exposures = np.load(f"{cache_dir}/exposures.npy")
+	# read exposures (low memory read since we only use a subset later)
+	exposures = np.load(f"{cache_dir}/exposures.npy", mmap_mode='r+')
 	factor_cols = np.load(f"{cache_dir}/factor_cols.npy")
 
 	## find desired subset of timepoints
@@ -224,7 +215,7 @@ def load_data(
 	assets = sorted(assets)
 
 	# Potentially exclude some sub-industries.
-	# This is useful since we exclude EGYOGINT and FINREAL in some analyses.
+	# This is useful since we exclude FINREAL in some analyses.
 	if to_exclude is not None:
 		if isinstance(to_exclude, str):
 			assets = [asset for asset in assets if to_exclude not in industries[asset]]
@@ -251,7 +242,7 @@ def load_data(
 		exposures = exposures[:, :, finds]
 		factor_cols = factor_cols[finds]
 
-	### get rid of redundant factors with missing/zero exposures
+	### get rid of redundant factors with all missing/zero exposures
 	non_redundant = np.mean(
 		np.isnan(exposures) | (exposures == 0), axis=0
 	).mean(axis=0) != 1
@@ -267,6 +258,8 @@ def load_data(
 	)
 
 def main(args):
+	# ensure cache directory exists
+	os.makedirs(CACHE_DIR, exist_ok=True)
 	# Parse argument (nrows is helpful for debugging)
 	args = parser.parse_args(args)
 	nrows = args.get("nrows", [DEFAULT_NROWS])[0]
@@ -288,49 +281,28 @@ def main(args):
 	data = pd.concat(data, axis='index')
 	all_assets = np.sort(np.unique([x[0] for x in data.columns if x[0][0] == 'Z']))
 
-	# Load map from assets --> names and vice versa
+	# Load map from assets <--> names and vice versa
 	asset_names = pd.read_csv(f"{DATA_DIR}/assets_id_to_name.csv").rename(
 		columns={"invariant_id":"ASSET", "name_sec":"name"}
 	)
 	asset2names = asset_names.set_index("ASSET")['name']
 	names2asset = asset_names.set_index("name")['ASSET']
 
-	## 2. Create returns (outcomes)
-	print(f"Creating returns at {elapsed(t0)}.")
-	# date parsing
-	data.index = data.index.map(lambda x: datetime.datetime(
-			year=int(str(x)[0:4]), month=int(str(x)[4:6]), day=int(str(x)[6:])
-	))
-	returns = data[[(asset, "EXRETURN") for asset in all_assets]].copy()
-	returns.columns = returns.columns.get_level_values(0)
-	returns.columns.name = 'ASSET'
-	returns.index.name = 'Date'
-	# remove duplicate assets
-	to_remove, _ = remove_redundant_assets(assets=all_assets, asset2names=asset2names, outcomes=returns.values)
-	all_assets = sorted(list(set(all_assets) - set(to_remove)))
-	returns = returns[all_assets]
-	# save
-	if nrows is None:
-		returns.to_csv(f"{CACHE_DIR}/returns.csv")
-
-	## 3. Factor columns
-	factor_cols = np.sort([c for c in data['Z913Y29A4'].columns if c not in ['EXRETURN', 'SRET', 'CAPT']])
+	## 2. find factor columns
+	factor_cols = np.sort([c for c in data[all_assets[0]].columns if c not in ['EXRETURN', 'SRET', 'CAPT']])
 	k = len(factor_cols)
 	if nrows is None:
 		np.save(f"{CACHE_DIR}/factor_cols.npy", factor_cols)
 
-	## 4. Create exposures
+	## 3. Create exposures
 	print(f"Creating exposures at {elapsed(t0)}.")
 	exposures = []
 	for factor_col in factor_cols:
 		exp = data[[(asset, factor_col) for asset in all_assets]].values
 		exposures.append(exp)
-
 	exposures = np.stack(exposures, axis=-1)
-	if nrows is None:
-		np.save(f"{CACHE_DIR}/exposures.npy", exposures)
 
-	## 5. Industry markers
+	## 4. Industry markers
 	if nrows is None:
 		print(f"Creating industries at {elapsed(t0)}.")
 	exp2 = exposures.copy()
@@ -342,10 +314,37 @@ def main(args):
 	ind_means = data[all_assets].fillna(0).mean(axis=0).unstack()
 	industries = ind_means[ims].idxmax(axis=1)
 	industries.name = 'Industry'
-	if nrows is None:
-		industries.to_csv(f"{CACHE_DIR}/industries.csv")
 
-	## 6. Exposure subset for simulations
+	## 5. Create returns (outcomes) (these are excess returns)
+	print(f"Creating returns at {elapsed(t0)}.")
+	# date parsing
+	data.index = data.index.map(lambda x: datetime.datetime(
+			year=int(str(x)[0:4]), month=int(str(x)[4:6]), day=int(str(x)[6:])
+	))
+	returns = data[[(asset, "EXRETURN") for asset in all_assets]].copy()
+	returns.columns = returns.columns.get_level_values(0)
+	returns.columns.name = 'ASSET'
+	returns.index.name = 'Date'
+	
+	## 6. remove duplicate assets
+	to_remove, _ = remove_redundant_assets(
+		assets=all_assets, asset2names=asset2names, outcomes=returns.values, industries=industries
+	)
+	remaining_inds = [j for j, asset in enumerate(all_assets) if asset not in to_remove]
+	exposures = exposures[:, remaining_inds]
+	returns = returns.iloc[:, remaining_inds].copy()
+	industries = industries.iloc[remaining_inds].copy()
+	all_assets = all_assets[remaining_inds]
+	if np.any(all_assets != returns.columns):
+		raise RunTimeError("Alignment of return/exposure columns failed; there is a bug!")
+
+	## 7. save everything
+	if nrows is None:
+		returns.to_csv(f"{CACHE_DIR}/returns.csv")
+		industries.to_csv(f"{CACHE_DIR}/industries.csv")
+		np.save(f"{CACHE_DIR}/exposures.npy", exposures)
+
+	## 8. Exposure subset for simulations
 	if nrows is None:
 		target = datetime.datetime(year=2020, month=5, day=21)
 	else:
@@ -357,12 +356,11 @@ def main(args):
 		# subset to industry-specific assets
 		sector_inds = np.array([
 			i for i, asset in enumerate(all_assets) 
-			if (industries[asset][0:3] == industry) and
-			(industries[asset] != 'EGYOGINT') # contains duplicate assets as described in the paper
+			if (industries[asset][0:3] == industry)
 		])
 		sim_exposures = sim_exposures[sector_inds].copy()
 		# drop factors which are all zero or missing
-		# (e.g. factors for non-financial sectors should be dropped)
+		# (e.g. factors for non-financial sectors should be dropped when industry='FIN')
 		sim_exposures = sim_exposures[:, ~np.all(np.isnan(sim_exposures) | (sim_exposures == 0), axis=0)]
 		# ONLY for simulations, impute any missing exposures
 		np.random.seed(123)
