@@ -56,7 +56,7 @@ def compute_active_subset(
 		list(set(np.where(nan_props <= thresh)[0]))
 	)
 	subset = subset.intersection(
-		set(list(np.where(residuals.std(axis=0) > 0)[0]))
+		set(list(np.where(np.nanstd(residuals, axis=0) > 0)[0]))
 	)
 	return np.array(list(subset)).astype(int)
 
