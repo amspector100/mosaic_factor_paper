@@ -351,7 +351,7 @@ def main(args):
 		# Only used for debugging
 		target = datetime.datetime(year=2018, month=1, day=2)
 	ind = np.where(returns.index == target)[0].item()
-	for industry in ['FIN', 'EGY']:
+	for industry in ['FIN', 'EGY', 'HLC']:
 		sim_exposures = exposures[ind].copy()
 		# subset to industry-specific assets
 		sector_inds = np.array([
