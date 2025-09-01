@@ -5,12 +5,13 @@ Runs simulations on the factor randomization test.
 import os
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 from scipy import stats
 import pandas as pd
 from context import mosaicperm as mp
-from context import mosaic_paper_src
+from context import mosaic_paper_src, root_directory
 from mosaic_paper_src import parser, utilities, nonexch_sampling
 from bootstrap_sims import load_exposures
 
@@ -28,26 +29,26 @@ COLUMNS = [
 	'zstat',
 	'null_stat',
 ]
-SIMULATION_DATA_PATH = "../data/bfre_cache/"
-PLACEHOLDER_DATAH_PATH = "../data/bfre_placeholder/"
+SIMULATION_DATA_PATH = Path(root_directory) / "data" / "bfre_cache"
+PLACEHOLDER_DATA_PATH = Path(root_directory) / "data" / "bfre_placeholder"
 
 def load_garch_params(industry='FIN'):
 	"""
 	Loads the GARCH parameters for a given industry.
 	"""
 	try:
-		return pd.read_csv(SIMULATION_DATA_PATH + f"garch_parameters_{industry}.csv")	
+		return pd.read_csv(SIMULATION_DATA_PATH / f"garch_parameters_{industry}.csv")	
 	except FileNotFoundError:
-		return pd.read_csv(PLACEHOLDER_DATAH_PATH + f"garch_parameters_{industry}.csv")
+		return pd.read_csv(PLACEHOLDER_DATA_PATH / f"garch_parameters_{industry}.csv")
 
 def load_mvn_arch_params(industry='FIN'):
 	"""
 	Loads the multivariate ARCH parameters for a given industry.
 	"""
 	try:
-		return pd.read_csv(SIMULATION_DATA_PATH + f"multivariate_parameters_{industry}.csv")	
+		return pd.read_csv(SIMULATION_DATA_PATH / f"multivariate_parameters_{industry}.csv")	
 	except FileNotFoundError:
-		return pd.read_csv(PLACEHOLDER_DATAH_PATH + f"multivariate_parameters_{industry}.csv")
+		return pd.read_csv(PLACEHOLDER_DATA_PATH / f"multivariate_parameters_{industry}.csv")
 
 def single_seed_sim(
 	seed, n, industry, sampling_method, t0, **args

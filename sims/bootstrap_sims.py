@@ -6,11 +6,12 @@ import os
 import sys
 import time
 import datetime
+from pathlib import Path
 import numpy as np
 from scipy import stats
 import pandas as pd
 from context import mosaicperm as mp
-from context import mosaic_paper_src
+from context import mosaic_paper_src, root_directory
 from mosaic_paper_src import parser, utilities, bootstrap
 
 # Specifies the type of simulation
@@ -27,26 +28,26 @@ COLUMNS = [
 	'null_stat',
 ]
 
-SIMULATION_DATA_PATH = "../data/bfre_cache/"
-PLACEHOLDER_DATAH_PATH = "../data/bfre_placeholder/"
+SIMULATION_DATA_PATH = Path(root_directory) / "data" / "bfre_cache"
+PLACEHOLDER_DATA_PATH = Path(root_directory) / "data" / "bfre_placeholder"
 
 def load_exposures(industry='FIN'):
 	"""
 	Loads the simulation exposures for a given industry.
 	"""
 	try:
-		return np.load(SIMULATION_DATA_PATH + f"simulation_exposures_{industry}.npy")	
+		return np.load(SIMULATION_DATA_PATH / f"simulation_exposures_{industry}.npy")	
 	except FileNotFoundError:
-		return np.load(PLACEHOLDER_DATAH_PATH + f"simulation_exposures_{industry}.npy")
+		return np.load(PLACEHOLDER_DATA_PATH / f"simulation_exposures_{industry}.npy")
 
 def load_sigma2s(industry='FIN'):
 	"""
 	Loads the simulation sigma2s for a given industry.
 	"""
 	try:
-		df = pd.read_csv(SIMULATION_DATA_PATH + f"simulation_sigma2s_{industry}.csv", index_col=0)	
+		df = pd.read_csv(SIMULATION_DATA_PATH / f"simulation_sigma2s_{industry}.csv", index_col=0)	
 	except FileNotFoundError:
-		df = pd.read_csv(PLACEHOLDER_DATAH_PATH + f"simulation_sigma2s_{industry}.csv", index_col=0)
+		df = pd.read_csv(PLACEHOLDER_DATA_PATH / f"simulation_sigma2s_{industry}.csv", index_col=0)
 	df.index = pd.to_datetime(df.index)
 	return df
 
