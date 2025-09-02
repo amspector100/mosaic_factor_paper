@@ -36,7 +36,7 @@ def load_exposures(industry='FIN'):
 	Loads the simulation exposures for a given industry.
 	"""
 	try:
-		return np.load(SIMULATION_DATA_PATH / f"simulation_exposures_{industry}.npy")	
+		return np.load(SIMULATION_DATA_PATH / f"simulation_exposures_{industry}.npy")
 	except FileNotFoundError:
 		return np.load(PLACEHOLDER_DATA_PATH / f"simulation_exposures_{industry}.npy")
 

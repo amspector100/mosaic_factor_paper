@@ -105,7 +105,7 @@ def simulate_garch_residuals(n, T, omegas, alphas, betas, rho):
         arch_term = np.sum(alphas * epsilon[:,t-k:t][:,::-1]**2, axis=1)
         garch_term = np.sum(betas  * sigma2[:,t-k:t][:,::-1], axis=1)
         sigma2[:,t] =  omegas + arch_term + garch_term
-        epsilon[:,t] = rho * z[:,t] * np.sqrt(sigma2[:,t]) + np.sqrt(1-rho**2) * epsilon[:, t-1]
+        epsilon[:,t] = np.sqrt(1-rho**2) * z[:,t] * np.sqrt(sigma2[:,t]) + rho * epsilon[:, t-1]
         
     return epsilon[:, k:]
 

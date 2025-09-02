@@ -371,6 +371,7 @@ def main(args):
 		)
 		if nrows is None:
 			np.save(f"{CACHE_DIR}/simulation_exposures_{industry}.npy", sim_exposures)
+			np.save(f"{PLACEHOLDER_DIR}/simulation_exposures_{industry}.npy", sim_exposures)
 
 if __name__ == '__main__':
 	main(sys.argv)
