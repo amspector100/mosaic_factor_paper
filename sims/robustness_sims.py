@@ -59,7 +59,7 @@ def single_seed_sim(
 		seed, n, industry, sampling_method,
 	]
 	# # method arguments
-	msg = f"At seed={seed}, n={n}"
+	msg = f"At seed={seed}, n={n}, industry={industry}, sampling_method={sampling_method}."
 	msg += f" at {utilities.elapsed(t0)}."
 	print(msg)
 	sys.stdout.flush()
@@ -100,6 +100,7 @@ def single_seed_sim(
 		).T
 	else:
 		raise ValueError(f"Unrecognized sampling_method={sampling_method}.")
+	#print(outcomes.std(axis=1)[[0, -1]], outcomes.std(axis=0)[[0, -1]], outcomes.shape)
 
 	# initialize output
 	output = []
@@ -165,7 +166,7 @@ def main(args):
 		'method',
 		'sampling_method',
 		'industry',
-	])[['pval', 'statistic', 'null_stat', 'zstat']].agg(['mean'])
+	])[['pval', 'statistic', 'null_stat', 'zstat', 'disc']].agg(['mean'])
 	pd.set_option('display.max_rows', 500)
 	print(summary)
 

@@ -97,7 +97,7 @@ def simulate_garch_residuals(n, T, omegas, alphas, betas, rho):
     epsilon[:,:k] = np.sqrt(unc_var.reshape(-1, 1)) * np.random.normal(size=(n, k))
     
     # Generate standard normal innovations for t >= q
-    z = np.random.randn((n, T+k))
+    z = np.random.randn(n, T+k)
     
     # Simulate the GARCH(k,k) process
     for t in range(k, T+k):
@@ -156,7 +156,6 @@ def simulate_multivariate_diagonal_arch(T, omegas, A, rho):
     Parameters:
     - T: int, length of each time series
     - A: np.array, shape (n, n), ARCH coefficients
-    - rho: np.array, shape (n,), AR(1) coefficients
     """
     n = A.shape[0]
     epsilon = np.zeros((n, T))
@@ -167,9 +166,9 @@ def simulate_multivariate_diagonal_arch(T, omegas, A, rho):
     
     # Generate the trajectories in a vectorized loop.
     for t in range(1, T):
-        sigma2s = A @ epsilon[:, t-1]**2 + omegas
-        epsilon[:, t] = rho * z[:, t] * np.sqrt(sigma2s) + np.sqrt(1-rho**2) * epsilon[:, t-1]
-    
+        sigma2s = np.maximum(A @ epsilon[:, t-1]**2, 0)
+        epsilon[:, t] = z[:, t] * np.sqrt(omegas + sigma2s)
+
     return epsilon
     
     
