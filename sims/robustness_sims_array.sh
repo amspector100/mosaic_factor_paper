@@ -20,7 +20,6 @@ MAIN_ARGS="
         --num_processes $NPROC
         --seed_start $SLURM_ARRAY_TASK_ID
         --job_id $SLURM_ARRAY_JOB_ID
-        --eps_dist tdist
 "
 
 
