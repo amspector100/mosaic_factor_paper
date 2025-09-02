@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 #SBATCH --ntasks 1
-#SBATCH --array=1-2000:10
+#SBATCH --array=1-2000:50
 #SBATCH --job-name=mpt_sim
 #SBATCH --output=../log/bootstrap/sim%A_%a.out
 #SBATCH --error=../log/bootstrap/sim_%A_%a.err
@@ -9,7 +9,7 @@
 #SBATCH -c 1
 #SBATCH --mem=4GB
 
-NREPS=10 # make sure this is the same as the job array step size
+NREPS=50 # make sure this is the same as the job array step size
 NPROC=1
 
 MAIN_ARGS="
