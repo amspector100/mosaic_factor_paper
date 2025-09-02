@@ -149,7 +149,6 @@ def single_seed_sim(
 	msg = f"At seed={seed}, n={n}, sparsity={sparsity}, rho={rho}"
 	msg += f" at {utilities.elapsed(t0)}."
 	print(msg)
-	sys.stdout.flush()
 
 	# create data
 	data = sample_data(n=n, seed=seed, rho=rho, sparsity=sparsity, L=L, eps_dist=eps_dist)

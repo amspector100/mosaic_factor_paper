@@ -62,7 +62,6 @@ def single_seed_sim(
 	msg = f"At seed={seed}, n={n}, industry={industry}, sampling_method={sampling_method}."
 	msg += f" at {utilities.elapsed(t0)}."
 	print(msg)
-	sys.stdout.flush()
 
 	# data (placeholder for now)
 	np.random.seed(seed)
