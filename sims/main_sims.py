@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 from context import mosaicperm as mp
-from context import mosaic_paper_src
+from context import mosaic_paper_src, root_directory
 from mosaic_paper_src import parser, utilities
 
 # Specifies the type of simulation
@@ -31,8 +31,8 @@ COLUMNS = [
 	'T',
 	'runtime',
 ]
-L_FILEPATH = "../data/bfre_cache/simulation_exposures_FIN.npy"
-L_PLACEHOLDER_FILEPATH = "../data/bfre_placeholder/simulation_exposures_FIN.npy"
+L_FILEPATH = root_directory + "/data/bfre_cache/simulation_exposures_FIN.npy"
+L_PLACEHOLDER_FILEPATH = root_directory + "/data/bfre_placeholder/simulation_exposures_FIN.npy"
 
 def sample_data(n, seed, rho, sparsity, L, eps_dist):
 	p, k = L.shape
@@ -63,6 +63,7 @@ def sample_data(n, seed, rho, sparsity, L, eps_dist):
 		gamma=gamma,
 		v=v,
 		rho=rho,
+		Z=Z,
 	)
 
 def append_mpt_results(
@@ -191,6 +192,14 @@ def single_seed_sim(
 
 	return output
 
+def load_L_matrix():
+	if os.path.exists(L_FILEPATH):
+		L = np.load(L_FILEPATH)
+	else:
+		print("Simulation exposures are not available---using placeholder instead.")
+		L = np.load(L_PLACEHOLDER_FILEPATH)
+	return L
+
 def main(args):
 	t0 = time.time()
 	# Parse arguments
@@ -202,11 +211,7 @@ def main(args):
 	job_id = int(args.pop("job_id", [0])[0])
 
 	## Load exposures
-	if os.path.exists(L_FILEPATH):
-		L = np.load(L_FILEPATH)
-	else:
-		print("Simulation exposures are not available---using placeholder instead.")
-		L = np.load(L_PLACEHOLDER_FILEPATH)
+	L = load_L_matrix(industry='FIN')
 
 	## Key defaults go here
 	args['n'] = args.get("n", [100])
