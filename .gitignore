@@ -13,6 +13,7 @@ test/
 plots/
 data/original_tilings/
 bfre_analysis/bfre_preprocessing.ipynb
+log/
 # the following is too large to save---downloaded from gdrive
 data/bfre_placeholder/exposures.npy
 data/bfre_placeholder/returns.csv
