@@ -26,7 +26,7 @@ def create_naive_methods_plot(data: pd.DataFrame):
     fig, axes = plt.subplots(1, 3, figsize=(12, 4.1))
 
     # The bootstrap suggested by our reviewer
-    regular_bs = 'bootstrap_impose_nullTrue_residualizeTrue_block_sizeNone_quantileTrue'
+    regular_bs = 'bootstrap_residualizeTrue_methoddefault_quantileTrue'
     olslab = 'OLS statistic, S($\hat\epsilon^{OLS}$)'
 
 
@@ -80,7 +80,8 @@ def create_naive_methods_plot(data: pd.DataFrame):
 
     os.makedirs(root_dir / "plots/", exist_ok=True)
     plt.savefig(root_dir / "plots" / "naive_methods.png", dpi=500, bbox_inches='tight')
-    plt.show()
+    plt.close()
+    #plt.show()
 
 def main():
     ## Load data
@@ -89,7 +90,7 @@ def main():
         sim_type='bootstrap_sims'
     )
     ## Plot
-    create_naive_methods_plot(data)
+    create_naive_methods_plot(data)    
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 #SBATCH --ntasks 1
 #SBATCH --array=1-2000:50
-#SBATCH --job-name=mpt_sim
-#SBATCH --output=../log/bootstrap/sim%A_%a.out
+#SBATCH --job-name=bootstrap_sim
+#SBATCH --output=../log/bootstrap/sim_%A_%a.out
 #SBATCH --error=../log/bootstrap/sim_%A_%a.err
 #SBATCH --time=23:59:00
 #SBATCH -p candes 

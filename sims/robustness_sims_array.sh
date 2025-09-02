@@ -2,8 +2,8 @@
 #SBATCH --ntasks 1
 #SBATCH --array=1-4000:20
 #SBATCH --job-name=mpt_sim
-#SBATCH --output=../log/robustness_sim_%A_%a.out
-#SBATCH --error=../log/robustness_sim_%A_%a.err
+#SBATCH --output=../log/robustness/sim_%A_%a.out
+#SBATCH --error=../log/robustness/sim_%A_%a.err
 #SBATCH --time=23:59:00
 #SBATCH -p candes,stat,hns,normal
 #SBATCH -c 1
