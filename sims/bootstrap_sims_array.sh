@@ -15,6 +15,7 @@ NPROC=1
 MAIN_ARGS="
         --industry [FIN]
         --n [300]
+        --center_date [covid,2021,2022,2023]
         --reps $NREPS
         --num_processes $NPROC
         --seed_start $SLURM_ARRAY_TASK_ID

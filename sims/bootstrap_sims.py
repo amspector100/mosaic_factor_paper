@@ -21,6 +21,7 @@ COLUMNS = [
 	'seed',
 	'industry',
 	'n',
+	'center_date',
 	'method',
 	'statistic',
 	'pval',
@@ -43,12 +44,12 @@ def load_sigma2s(industry='FIN'):
 	return df
 
 def single_seed_sim(
-	seed, n, industry, t0, **args
+	seed: int, n: int, industry: str, center_date: str, t0: float, **args
 ):
 	industry = industry.upper()
 	# # arguments and defaults
 	dgp_args = [
-		seed, industry, n, 
+		seed, industry, n, center_date,
 	]
 	# # method arguments
 	msg = f"At seed={seed}, n={n}"
@@ -59,9 +60,14 @@ def single_seed_sim(
 	np.random.seed(seed)
 	exposures = loading.load_exposures(industry=industry)
 	sigma2s = load_sigma2s(industry=industry)
-	# Find n days which are closest to covid	
-	covid = datetime.datetime(2020, 2, 20)
-	distances = np.abs((sigma2s.index - covid).days)
+	# Find n days which are closest to covid
+	if center_date == 'covid':
+		center_date = datetime.datetime(2020, 2, 20)
+	elif str(center_date) in ['2021', '2022', '2023']:
+		center_date = datetime.datetime(int(center_date), 1, 1)
+	else:
+		raise ValueError(f"Unrecognized center_date={center_date}.")
+	distances = np.abs((sigma2s.index - center_date).days)
 	order = np.argsort(distances.astype(float))
 	selected_days = sigma2s.index[order[:n]].sort_values()
 	# Create sigma2s
@@ -82,33 +88,35 @@ def single_seed_sim(
 	test_stat = mp.statistics.mean_maxcorr_stat
 
 	# Run mosaic permutation test
-	mptest = mp.factor.MosaicFactorTest(
-		outcomes=outcomes,
-		exposures=exposures,
-		test_stat=test_stat,
-		batches=batches,
-	)
-	mptest.fit(nrand=nrand, verbose=False)
-	output.append(
-		dgp_args + ['MPT', mptest.statistic, mptest.pval, mptest.apprx_zstat, mptest.null_statistics[0].item()]
-	)
-	print(f"Finished MPT at {utilities.elapsed(t0)}.")
+	if args.get("run_mpt", True):
+		mptest = mp.factor.MosaicFactorTest(
+			outcomes=outcomes,
+			exposures=exposures,
+			test_stat=test_stat,
+			batches=batches,
+		)
+		mptest.fit(nrand=nrand, verbose=False)
+		output.append(
+			dgp_args + ['MPT', mptest.statistic, mptest.pval, mptest.apprx_zstat, mptest.null_statistics[0].item()]
+		)
+		print(f"Finished MPT at {utilities.elapsed(t0)}.")
 
 	# Naive permutation test
-	pval, statistic, null_stats = bootstrap.naive_permutation_test(
-		hateps=mp.factor.ols_residuals(outcomes, exposures),
-		test_stat=test_stat,
-		R=nrand,
-	)
-	output.append(
-		dgp_args + [
-			'Naive Permutation',
-			statistic,
-			pval,
-			(statistic - null_stats.mean()) / null_stats.std(),
-			null_stats[0].item(),
-		]
-	)
+	if args.get("run_permtest", True):
+		pval, statistic, null_stats = bootstrap.naive_permutation_test(
+			hateps=mp.factor.ols_residuals(outcomes, exposures),
+			test_stat=test_stat,
+			R=nrand,
+		)
+		output.append(
+			dgp_args + [
+				'Naive Permutation',
+				statistic,
+				pval,
+				(statistic - null_stats.mean()) / null_stats.std(),
+				null_stats[0].item(),
+			]
+		)
 
 	# Run bootstraps
 	impose_null = True
@@ -157,6 +165,7 @@ def main(args):
 	## Key defaults go here
 	args['n'] = args.get("n", [100])
 	args['industry'] = args.get("industry", ['FIN'])
+	args['center_date'] = args.get("center_date", ['covid']) # options: covid, 2020, 2021, 2022, 2023
 
 	# Save args, create output dir
 	output_dir = utilities.create_output_directory(args, dir_type=DIR_TYPE)
@@ -183,6 +192,7 @@ def main(args):
 		'n',
 		'method',
 		'industry',
+		'center_date',
 	])[['pval', 'statistic', 'null_stat', 'zstat']].agg(['mean'])
 	pd.set_option('display.max_rows', 500)
 	print(summary)
