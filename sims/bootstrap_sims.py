@@ -12,7 +12,7 @@ from scipy import stats
 import pandas as pd
 from context import mosaicperm as mp
 from context import mosaic_paper_src, root_directory
-from mosaic_paper_src import parser, utilities, bootstrap
+from mosaic_paper_src import parser, utilities, bootstrap, loading
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -30,15 +30,6 @@ COLUMNS = [
 
 SIMULATION_DATA_PATH = Path(root_directory) / "data" / "bfre_cache"
 PLACEHOLDER_DATA_PATH = Path(root_directory) / "data" / "bfre_placeholder"
-
-def load_exposures(industry='FIN'):
-	"""
-	Loads the simulation exposures for a given industry.
-	"""
-	try:
-		return np.load(SIMULATION_DATA_PATH / f"simulation_exposures_{industry}.npy")
-	except FileNotFoundError:
-		return np.load(PLACEHOLDER_DATA_PATH / f"simulation_exposures_{industry}.npy")
 
 def load_sigma2s(industry='FIN'):
 	"""
@@ -66,7 +57,7 @@ def single_seed_sim(
 
 	# data (placeholder for now)
 	np.random.seed(seed)
-	exposures = load_exposures(industry=industry)
+	exposures = loading.load_exposures(industry=industry)
 	sigma2s = load_sigma2s(industry=industry)
 	# Find n days which are closest to covid	
 	covid = datetime.datetime(2020, 2, 20)

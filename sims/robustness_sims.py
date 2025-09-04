@@ -12,8 +12,7 @@ from scipy import stats
 import pandas as pd
 from context import mosaicperm as mp
 from context import mosaic_paper_src, root_directory
-from mosaic_paper_src import parser, utilities, nonexch_sampling
-from bootstrap_sims import load_exposures
+from mosaic_paper_src import parser, utilities, nonexch_sampling, loading
 
 # Specifies the type of simulation
 DIR_TYPE = os.path.split(os.path.abspath(__file__))[1].split(".py")[0]
@@ -23,51 +22,36 @@ COLUMNS = [
 	'n',
 	'industry',
 	'sampling_method',
+	'inflation_ratio',
 	'method',
 	'statistic',
 	'pval',
 	'zstat',
 	'null_stat',
 ]
-SIMULATION_DATA_PATH = Path(root_directory) / "data" / "bfre_cache"
-PLACEHOLDER_DATA_PATH = Path(root_directory) / "data" / "bfre_placeholder"
-
-def load_garch_params(industry='FIN'):
-	"""
-	Loads the GARCH parameters for a given industry.
-	"""
-	try:
-		return pd.read_csv(SIMULATION_DATA_PATH / f"garch_parameters_{industry}.csv")	
-	except FileNotFoundError:
-		return pd.read_csv(PLACEHOLDER_DATA_PATH / f"garch_parameters_{industry}.csv")
-
-def load_mvn_arch_params(industry='FIN'):
-	"""
-	Loads the multivariate ARCH parameters for a given industry.
-	"""
-	try:
-		return pd.read_csv(SIMULATION_DATA_PATH / f"multivariate_parameters_{industry}.csv")	
-	except FileNotFoundError:
-		return pd.read_csv(PLACEHOLDER_DATA_PATH / f"multivariate_parameters_{industry}.csv")
 
 def single_seed_sim(
-	seed, n, industry, sampling_method, t0, **args
+	seed, n, industry, sampling_method, inflation_ratio, t0, **args
 ):
 	industry = industry.upper()
 	# # arguments and defaults
 	dgp_args = [
-		seed, n, industry, sampling_method,
+		seed, n, industry, sampling_method, inflation_ratio,
 	]
 	# # method arguments
-	msg = f"At seed={seed}, n={n}, industry={industry}, sampling_method={sampling_method}."
+	msg = f"At seed={seed}, n={n}, industry={industry}, sampling_method={sampling_method}, inflation_ratio={inflation_ratio}."
 	msg += f" at {utilities.elapsed(t0)}."
 	print(msg)
 
 	# data (placeholder for now)
 	np.random.seed(seed)
-	exposures = load_exposures(industry=industry) # p x k
-	garch_params = load_garch_params(industry=industry)
-	mvn_arch_params = load_mvn_arch_params(industry=industry)
+	exposures = loading.load_exposures(industry=industry) # p x k
+	garch_params = loading.load_garch_params(industry=industry)
+	mvn_arch_params = loading.load_mvn_arch_params(industry=industry)
+	if inflation_ratio > 1:
+		garch_params['omega'] /= inflation_ratio
+		garch_params['rho'] = np.clip(garch_params['rho']* inflation_ratio, -0.99, 0.99)
+		mvn_arch_params.values[:, 0] /= inflation_ratio
 
     # simulate residuals
 	if sampling_method == 'ar1':
@@ -164,6 +148,7 @@ def main(args):
 		'n',
 		'method',
 		'sampling_method',
+		'inflation_ratio',
 		'industry',
 	])[['pval', 'statistic', 'null_stat', 'zstat', 'disc']].agg(['mean'])
 	pd.set_option('display.max_rows', 500)

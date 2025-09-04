@@ -32,7 +32,7 @@ COLUMNS = [
 	'runtime',
 ]
 L_FILEPATH = root_directory + "/data/bfre_cache/simulation_exposures_FIN.npy"
-L_PLACEHOLDER_FILEPATH = root_directory + "/data/bfre_placeholder/simulation_exposures_FIN.npy"
+L_PLACEHOLDER_FILEPATH = root_directory / "data" / "bfre_placeholder" / "simulation_exposures_FIN.npy"
 
 def sample_data(n, seed, rho, sparsity, L, eps_dist):
 	p, k = L.shape

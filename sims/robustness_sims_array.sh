@@ -22,6 +22,11 @@ MAIN_ARGS="
         --job_id $SLURM_ARRAY_JOB_ID
 "
 
+STRESSTEST_ARGS="
+        $MAIN_ARGS
+        --inflation_ratio [1,1.25,1.5,1.75,2,2.25,2.5,2.75,3,3.25,3.5,3.75,4]
+"
 
 source /home/users/aspector/mosaic/setup_env.sh
-python robustness_sims.py $MAIN_ARGS
+#python robustness_sims.py $MAIN_ARGS
+python robustness_sims.py $STRESSTEST_ARGS

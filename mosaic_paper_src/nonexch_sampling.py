@@ -73,7 +73,7 @@ def simulate_garch_residuals(n, T, omegas, alphas, betas, rho):
             
     Returns:
     epsilon : np.array
-        simulated series (innovations scaled by sqrt of conditional variance)
+        simulated series
     """
     # Ensure alphas and betas are 2D arrays
     if len(alphas.shape) == 1:

@@ -6,6 +6,8 @@ utility functions for loading the cached data.
 
 import os
 import sys
+from pathlib import Path
+root_dir = Path(__file__).parent.parent
 # Import mosaicperm package---you can also just install mosaicperm via pip
 sys.path.insert(0, "../../mosaicperm/")
 import mosaicperm as mp
@@ -29,9 +31,9 @@ import seaborn as sns
 import warnings
 from plotnine import *
 
-DATA_DIR = "../data/bfre"
-CACHE_DIR = "../data/bfre_cache"
-PLACEHOLDER_DIR = "../data/bfre_placeholder"
+DATA_DIR = str(root_dir / "data" / "bfre")
+CACHE_DIR = str(root_dir / "data" / "bfre_cache")
+PLACEHOLDER_DIR = str(root_dir / "data" / "bfre_placeholder")
 DEFAULT_NROWS = None # useful for debugging since reading the raw data takes ~15 min
 
 ###############################################
