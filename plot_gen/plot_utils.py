@@ -36,7 +36,7 @@ def load_simulation_data(
 ):
     data = []
     for job_id in job_ids:
-        fnames = glob.glob(f"{str(root_dir)}/sim_data/{sim_type}/*/*/*{job_id}*.csv")
+        fnames = glob.glob(f"{str(root_dir)}/sim_data/{sim_type}/*/*/*id{job_id}_*.csv")
         for fname in fnames:
             data.append(pd.read_csv(fname))
     return pd.concat(data, axis='index')
